@@ -1,0 +1,19 @@
+id,name,type,address,lat,lon,shared_address_with,status,last_visit
+NR001,Big Softie,Business,"632 N Highland Ave NE, Atlanta, GA 30306",33.771731439418,-84.352582284783,,not visited,
+NR002,Church at Ponce & Highland,Church,"1085 Ponce de Leon Ave NE, Atlanta, GA 30306",33.773775129705,-84.352698947419,,"contacted, not visited",Before Nov 2026
+NR004,El Ponce,Business,"939 Ponce de Leon Ave NE, Atlanta, GA 30306",33.773764403916,-84.356394064105,,visited,Before Nov 2026
+NR005,Felinni's Pizza,Restaurant,"909 Ponce de Leon Ave NE, Atlanta, GA 30306",33.77376243698,-84.357075955241,,visited,Before Nov 2026
+NR006,Friends on Ponce,Restaurant,"736 Ponce De Leon Ave NE, Atlanta, GA 30306",33.773811198135,-84.363214462989,Southern Star Tattoo,visited,Before Nov 2026
+NR007,Gusto,Restaurant,"782 Ponce De Leon Ave NE, Atlanta, GA 30306",33.773862712309,-84.361526586271,,visited,Before Nov 2026
+NR008,Madeira Park,Business,"640 N Highland Ave NE, Atlanta, GA 30306",33.771902552514,-84.352581333894,,not visited,
+NR009,Majestic Diner,Restaurant,"1031 Ponce De Leon Ave NE, Atlanta, GA 30306",33.773773699245,-84.353166872499,,not visited,
+NR010,Manuels Tavern,Bar,"602 N Highland Ave NE, Atlanta, GA 30307",33.771017911933,-84.352586199833,,visited,Before Nov 2026
+NR011,Motorboat Deli and Bar,Restaurant,"710 Ponce De Leon Ave NE, Atlanta, GA 30306",33.77360410076,-84.363881263163,,visited,Before Nov 2026
+NR012,Rightous Room,Bar,"1049 Ponce De Leon Ave NE, Atlanta, GA 30306",33.773774176065,-84.353010897472,,not visited,
+NR013,Southern Star Tattoo,Business,"736 Ponce De Leon Ave NE, Atlanta, GA 30306",33.773811198135,-84.363214462989,Friends on Ponce,not visited,
+NR014,Sweet Auburn,Business,"656 N Highland Ave NE, Atlanta, GA 30306",33.772244778705,-84.352579432116,,visited,Before Nov 2026
+NR015,Tio Luchos,Business,"675 N Highland Ave NE #6000, Atlanta, GA 30306",33.772490936752,-84.352451748655,,visited,Before Nov 2026
+NR016,Videodrome,Business,"617 N Highland Ave NE, Atlanta, GA 30306",33.771407696454,-84.352446230615,,visited,Before Nov 2026
+NR017,The Zero Co,Business,"626 N Highland Ave NE, Atlanta, GA 30306",33.771603104596,-84.352582997949,,visited,Before Nov 2026
+NR018,Hotel Clermont,Hotel,"789 Ponce De Leon Ave NE, Atlanta, GA",33.773433,-84.361346,,not visited,
+NR019,Otto's Apartment Hotel (old Highland Inn),Hotel,"644 North Highland Ave, Atlanta, GA",33.772032,-84.352946,,not visited,
