@@ -51,7 +51,7 @@
 // Map centered on Poncey-Highland, with OpenStreetMap streets underneath.
 const map = L.map('map', { zoomControl: false }).setView([33.7725, -84.3575], 16);
 L.control.zoom({ position: 'topright' }).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20, subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', { maxZoom: 19, subdomains: 'abc', attribution: '&copy; OpenStreetMap contributors, OSM France' }).addTo(map);
 
 // Official Poncey-Highland outline from the City of Atlanta. If the city's server blocks the request, the map still works without it.
 fetch("https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/1/query?where=NAME%3D'Poncey-Highland'&returnGeometry=true&outSR=4326&f=geojson")
