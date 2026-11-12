@@ -23,6 +23,13 @@
   .legend summary { font-weight: 600; cursor: pointer; }
   .sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -2px; }
   .addstop { margin-top: 6px; font-size: 13px; padding: 4px 8px; }
+  .legend h4 { margin: 6px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #666; }
+  .shp { display: inline-block; margin-right: 8px; vertical-align: -1px; box-sizing: border-box; border: 1px solid #555; }
+  .dia { transform: rotate(45deg); }
+  .mk-apt, .mk-place { box-sizing: border-box; border: 2px solid #fff; box-shadow: 0 0 0 1px #555; display: flex; align-items: center; justify-content: center; }
+  .mk-place { transform: rotate(45deg); }
+  .mk-place span { transform: rotate(-45deg); font: 700 10px system-ui, sans-serif; color: #fff; }
+  .mk-on { box-shadow: 0 0 0 3px #185FA5 !important; }
 </style>
 </head>
 <body>
@@ -62,17 +69,21 @@ const legend = L.control({ position: 'topleft' });
 legend.onAdd = () => {
   const d = L.DomUtil.create('div', 'legend');
   d.innerHTML = `<details open><summary>Legend</summary>
-    <div><span class="sw" style="background:#5F5E5A;width:8px;height:8px"></span>Home door (house, condo, or townhome)</div>
-    <div><span class="sw" style="background:#185FA5;width:9px;height:9px"></span>Home door on the route</div>
-    <div><span class="sw" style="background:#534AB7"></span>Apartment building (blue ring when on the route)</div>
-    <div><span class="sw" style="background:#1D9E75;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Business or church, visited in the chosen time</div>
-    <div><span class="sw" style="background:#BA7517;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Contacted, not visited, in the chosen time</div>
-    <div><span class="sw" style="background:#9FE1CB;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Visited or contacted before Nov 2026 (exact date unknown)</div>
-    <div><span class="sw" style="background:#888780;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Not visited in the chosen time</div>
-    <div><span class="sw" style="background:#888780;border:2px solid #444"></span>Two places share this address</div>
-    <div><span style="display:inline-block;width:14px;height:4px;background:#534AB7;margin-right:6px;vertical-align:3px"></span>Walking route</div>
-    <div><span style="display:inline-block;width:14px;border-top:2px dashed #534AB7;margin-right:6px;vertical-align:3px"></span>Poncey-Highland boundary</div>
-    <div class="muted" style="max-width:190px;line-height:1.3;margin-top:4px">Tap empty map to add a stop. Tap a dot for details, then "Add a stop here."</div>
+    <h4>Shape: what it is</h4>
+    <div><span class="shp" style="width:8px;height:8px;border-radius:50%;background:#888780"></span>Home (house, condo, or townhome)</div>
+    <div><span class="shp" style="width:11px;height:11px;background:#888780"></span>Apartment building</div>
+    <div><span class="shp dia" style="width:10px;height:10px;background:#888780"></span>Business, church, or hotel</div>
+    <div><span class="shp dia" style="width:12px;height:12px;background:#888780;color:#fff;font:700 8px system-ui;text-align:center;line-height:11px"><span style="display:inline-block;transform:rotate(-45deg)">2</span></span>Two places at one address</div>
+    <h4>Color: visits in the chosen time</h4>
+    <div><span class="shp" style="width:11px;height:11px;border-radius:50%;background:#888780"></span>Not visited</div>
+    <div><span class="shp" style="width:11px;height:11px;border-radius:50%;background:#1D9E75"></span>Visited</div>
+    <div><span class="shp" style="width:11px;height:11px;border-radius:50%;background:#BA7517"></span>Contacted, not yet visited</div>
+    <div><span class="shp" style="width:11px;height:11px;border-radius:50%;background:#9FE1CB"></span>Visited or contacted before Nov 2026 (exact date unknown)</div>
+    <h4>Route</h4>
+    <div><span class="shp" style="width:11px;height:11px;border-radius:50%;background:#888780;border:none;box-shadow:0 0 0 3px #185FA5"></span>Blue ring: on the route</div>
+    <div><span style="display:inline-block;width:14px;height:4px;background:#534AB7;margin-right:8px;vertical-align:3px"></span>Walking route</div>
+    <div><span style="display:inline-block;width:14px;border-top:2px dashed #534AB7;margin-right:8px;vertical-align:3px"></span>Poncey-Highland boundary</div>
+    <div class="muted" style="max-width:200px;line-height:1.3;margin-top:4px">Tap empty map to add a stop. Tap a symbol for details, then "Add a stop here."</div>
   </details>`;
   L.DomEvent.disableClickPropagation(d);
   return d;
@@ -89,16 +100,32 @@ fetch("https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/Geopoliti
 const STATUS_COLOR = { 'visited': '#1D9E75', 'contacted, not visited': '#BA7517' };
 let windowDays = 30;
 
-// A place is colored by its status only if its last visit falls inside the chosen time window.
+// One color rule for every home, apartment building, and place: the color shows its visit status in the chosen time window.
 // Visits logged before the app existed have no exact date, so they get their own pale color in every window.
-function placeColor(d) {
+function statusColor(d) {
   if (!STATUS_COLOR[d.status]) return '#888780';
   if (d.last_visit === 'Before Nov 2026') return '#9FE1CB';
   const when = new Date(d.last_visit);
   if (isNaN(when)) return '#888780';
   return (Date.now() - when) / 86400000 <= windowDays ? STATUS_COLOR[d.status] : '#888780';
 }
-function refreshPlaceColors() { places.forEach(p => p.marker.setStyle({ fillColor: placeColor(p) })); }
+
+// Square symbol for apartment buildings and diamond symbol for businesses, churches, and hotels; a blue ring marks those on the route.
+function shapeIcon(kind, color, on, text) {
+  const size = kind === 'apt' ? 14 : 15;
+  return L.divIcon({ className: '', iconSize: [size, size],
+    html: `<div class="${kind === 'apt' ? 'mk-apt' : 'mk-place'}${on ? ' mk-on' : ''}" style="width:${size}px;height:${size}px;background:${color}"><span>${text || ''}</span></div>` });
+}
+
+// Restyle every symbol from its status color and whether it is on the route.
+function styleAll() {
+  homes.forEach(h => {
+    const c = statusColor(h);
+    if (h.apt) h.marker.setIcon(shapeIcon('apt', c, h.on));
+    else { h.marker.setStyle({ fillColor: c, color: h.on ? '#185FA5' : '#555', weight: h.on ? 2.5 : 1 }); h.marker.setRadius(h.on ? 5 : 3.5); }
+  });
+  places.forEach(p => p.marker.setIcon(shapeIcon('place', statusColor(p), p.on, p.shared_address_with ? '2' : '')));
+}
 let homes = [], places = [], routeLine = null, bufferM = 50;
 
 // Every dot's pop-up gets a button that adds a route stop at that dot, since tapping a dot opens its details instead.
@@ -116,16 +143,18 @@ Promise.all([loadCsv('data/home_doors.csv'), loadCsv('data/nonres_public.csv')])
   homes = h.map(d => {
     const apt = d.building_type === 'apartment building';
     const label = `${d.building_address}${d.unit ? ', Unit ' + d.unit : ''}<br>${d.building_type} · ${d.home_doors} home door${d.home_doors === '1' ? '' : 's'}`;
-    const m = L.circleMarker([+d.lat, +d.lon], { radius: apt ? 7 : 3, color: apt ? '#534AB7' : '#5F5E5A', weight: 1, fillOpacity: 0.7, bubblingMouseEvents: false })
+    const m = (apt ? L.marker([+d.lat, +d.lon], { icon: shapeIcon('apt', '#888780', false), bubblingMouseEvents: false })
+                   : L.circleMarker([+d.lat, +d.lon], { radius: 3.5, color: '#555', weight: 1, fillColor: '#888780', fillOpacity: 1, bubblingMouseEvents: false }))
       .bindTooltip(label).bindPopup(label + addStopButton(d)).addTo(map);
-    return { ...d, n: +d.home_doors, pt: turf.point([+d.lon, +d.lat]), marker: m, apt };
+    return { ...d, n: +d.home_doors, pt: turf.point([+d.lon, +d.lat]), marker: m, apt, on: false };
   });
   places = p.map(d => {
     const label = `<b>${d.name}</b><br>${d.type} · ${d.address}<br>Status: ${d.status}${d.last_visit ? ' (' + d.last_visit + ')' : ''}${d.shared_address_with ? '<br>Shares this address with ' + d.shared_address_with : ''}`;
-    const m = L.circleMarker([+d.lat, +d.lon], { radius: 8, color: d.shared_address_with ? '#444' : '#fff', weight: 2, fillColor: placeColor(d), fillOpacity: 1, bubblingMouseEvents: false })
+    const m = L.marker([+d.lat, +d.lon], { icon: shapeIcon('place', '#888780', false), bubblingMouseEvents: false, zIndexOffset: 500 })
       .bindTooltip(label).bindPopup(label + addStopButton(d)).addTo(map);
-    return { ...d, pt: turf.point([+d.lon, +d.lat]), marker: m };
+    return { ...d, pt: turf.point([+d.lon, +d.lat]), marker: m, on: false };
   });
+  styleAll();
 }).catch(e => alert('Could not load the data files: ' + e));
 
 // Walking routes come from the free FOSSGIS routing server, which asks for at most one request per second, so the route redraws only after a drag ends.
@@ -157,30 +186,29 @@ control.on('routesfound', e => {
 });
 control.on('waypointschanged', () => { if (realStops().length < 2) { routeLine = null; document.getElementById('routeInfo').textContent = 'Tap anywhere on the map to add a stop'; recount(); } });
 
-// Count houses and condos, apartment buildings (and the homes inside them), and other places within the chosen distance of the route, and enlarge the ones that count.
+// Count houses and condos, apartment buildings (and the homes inside them), and other places within the chosen distance of the route, and ring the ones that count.
 function recount() {
   let homeTotal = 0, aptTotal = 0, aptHomes = 0, otherTotal = 0;
-  const near = pt => routeLine && turf.pointToLineDistance(pt, routeLine, { units: 'meters' }) <= bufferM;
+  const near = pt => !!routeLine && turf.pointToLineDistance(pt, routeLine, { units: 'meters' }) <= bufferM;
   homes.forEach(h => {
-    const on = near(h.pt);
-    if (on && h.apt) { aptTotal += 1; aptHomes += h.n; }
-    else if (on) homeTotal += h.n;
-    h.marker.setStyle({ color: on ? '#185FA5' : (h.apt ? '#534AB7' : '#5F5E5A'), weight: h.apt && on ? 3 : 1, fillOpacity: on ? 1 : 0.35 });
-    h.marker.setRadius(h.apt ? 7 : (on ? 4.5 : 3));
+    h.on = near(h.pt);
+    if (h.on && h.apt) { aptTotal += 1; aptHomes += h.n; }
+    else if (h.on) homeTotal += h.n;
   });
-  places.forEach(p => { const on = near(p.pt); if (on) otherTotal += 1; p.marker.setRadius(on ? 10 : 8); });
+  places.forEach(p => { p.on = near(p.pt); if (p.on) otherTotal += 1; });
+  styleAll();
   document.getElementById('homeCount').textContent = homeTotal.toLocaleString();
   document.getElementById('aptCount').textContent = aptTotal;
   document.getElementById('aptHomes').textContent = `${aptHomes.toLocaleString()} home${aptHomes === 1 ? '' : 's'} inside`;
   document.getElementById('otherCount').textContent = otherTotal;
 }
 
-// Time filter: recolors places by whether their last visit falls inside the chosen window.
+// Time filter: recolors every symbol by whether its last visit falls inside the chosen window.
 document.querySelectorAll('.chips span[data-days]').forEach(c => c.onclick = () => {
   document.querySelectorAll('.chips span[data-days]').forEach(x => x.classList.remove('on'));
   c.classList.add('on');
   windowDays = +c.dataset.days;
-  refreshPlaceColors();
+  styleAll();
 });
 </script>
 </body>
