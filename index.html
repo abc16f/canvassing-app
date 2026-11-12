@@ -30,15 +30,35 @@
   .mk-place { transform: rotate(45deg); }
   .mk-place span { transform: rotate(-45deg); font: 700 10px system-ui, sans-serif; color: #fff; }
   .mk-on { box-shadow: 0 0 0 3px #185FA5 !important; }
+  #gate { position: fixed; inset: 0; z-index: 3000; background: #f3f2ee; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #gate.hide { display: none; }
+  #gate .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.15); padding: 20px; max-width: 360px; width: 100%; }
+  #gate h2 { margin: 0 0 6px; font-size: 20px; }
+  #gate input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 8px 10px; border: 1px solid #bbb; border-radius: 8px; margin: 10px 0; }
+  #gate button.main { width: 100%; font-size: 15px; padding: 9px; background: #534AB7; color: #fff; border: none; }
+  #gateMsg { margin-top: 10px; font-size: 14px; }
+  #who a { color: #534AB7; cursor: pointer; text-decoration: underline; }
 </style>
 </head>
 <body>
+<div id="gate">
+  <div class="card">
+    <h2>Poncey-Highland canvassing</h2>
+    <div class="muted" style="font-size:14px">This map is for invited canvassers. Enter your email and we will send you a sign-in link.</div>
+    <div id="gateForm">
+      <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
+      <button class="main" id="sendLink">Email me a sign-in link</button>
+    </div>
+    <div id="gateMsg"></div>
+  </div>
+</div>
 <div id="map"></div>
 <div id="panel">
   <div class="row" style="justify-content:space-between">
     <b>Poncey-Highland</b>
     <span class="muted" id="routeInfo">Tap anywhere on the map to add a stop</span>
   </div>
+  <div class="muted" id="who"></div>
   <div class="row" style="margin-top:6px; align-items:stretch">
     <div class="stat"><span class="muted">Homes on route, not apartments</span><b id="homeCount">0</b></div>
     <div class="stat"><span class="muted">Apartment buildings on route</span><b id="aptCount">0</b><span class="muted" id="aptHomes">0 homes inside</span></div>
@@ -59,6 +79,47 @@
 <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2.119.0/dist/umd/supabase.js"></script>
+<script>
+// Sign-in. The publishable key is meant to be public; the database's access rules decide what each person can see.
+const SUPABASE_URL = 'https://fsmrqphsvapnlghkpcmv.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_HwtYNPyU_ElOwGp7OvGUFQ_wdlgatgb';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let me = null;   // the signed-in canvasser's name and organizer flag, once confirmed
+
+const gate = document.getElementById('gate'), gateMsg = document.getElementById('gateMsg'), gateForm = document.getElementById('gateForm');
+function showGate(msg, showForm) {
+  me = null; gate.classList.remove('hide');
+  gateForm.style.display = showForm ? '' : 'none';
+  gateMsg.innerHTML = msg || '';
+}
+
+// Sends a one-time sign-in link. Only people already invited can get one, because sign-ups are turned off.
+document.getElementById('sendLink').onclick = async () => {
+  const email = document.getElementById('email').value.trim();
+  if (!email) { gateMsg.textContent = 'Type your email first.'; return; }
+  gateMsg.textContent = 'Sending...';
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname } });
+  gateMsg.textContent = error
+    ? (/signup|not allowed|not found/i.test(error.message) ? 'That email is not on the invite list. Ask Alex or Amir to invite you.' : 'Could not send the link: ' + error.message)
+    : 'Check your email for the sign-in link. Open it on this device.';
+};
+
+// After sign-in, confirm the person is on the team list before showing the map.
+async function checkMember(session) {
+  if (!session) return showGate('', true);
+  const { data, error } = await sb.from('members').select('display_name, is_organizer').eq('user_id', session.user.id);
+  if (error) return showGate('Could not check the team list: ' + error.message + '<br><button onclick="signOut()" style="margin-top:8px">Sign out</button>', false);
+  if (!data.length) return showGate(`You are signed in as ${session.user.email}, but you are not on the team list yet. Ask Alex or Amir to add you.<br><button onclick="signOut()" style="margin-top:8px">Sign out</button>`, false);
+  me = { ...data[0], id: session.user.id };
+  gate.classList.add('hide');
+  document.getElementById('who').innerHTML = `Signed in as ${me.display_name}${me.is_organizer ? ' (organizer)' : ''} · <a onclick="signOut()">Sign out</a>`;
+}
+async function signOut() { await sb.auth.signOut(); }
+
+// Runs when the page opens and whenever someone signs in or out. The check waits a moment so it does not block the sign-in library.
+sb.auth.onAuthStateChange((event, session) => setTimeout(() => checkMember(session), 0));
+</script>
 <script>
 // Map centered on Poncey-Highland, with the OpenStreetMap France street map underneath.
 const map = L.map('map', { zoomControl: false }).setView([33.7725, -84.3575], 16);
@@ -179,37 +240,4 @@ document.getElementById('buffer').onchange = e => { bufferM = +e.target.value; r
 
 control.on('routesfound', e => {
   const r = e.routes[0];
-  routeLine = turf.lineString(r.coordinates.map(c => [c.lng, c.lat]));
-  const miles = (r.summary.totalDistance / 1609.34).toFixed(2);
-  document.getElementById('routeInfo').textContent = `${miles} mi · about ${Math.round(r.summary.totalTime / 60)} min walking`;
-  recount();
-});
-control.on('waypointschanged', () => { if (realStops().length < 2) { routeLine = null; document.getElementById('routeInfo').textContent = 'Tap anywhere on the map to add a stop'; recount(); } });
-
-// Count houses and condos, apartment buildings (and the homes inside them), and other places within the chosen distance of the route, and ring the ones that count.
-function recount() {
-  let homeTotal = 0, aptTotal = 0, aptHomes = 0, otherTotal = 0;
-  const near = pt => !!routeLine && turf.pointToLineDistance(pt, routeLine, { units: 'meters' }) <= bufferM;
-  homes.forEach(h => {
-    h.on = near(h.pt);
-    if (h.on && h.apt) { aptTotal += 1; aptHomes += h.n; }
-    else if (h.on) homeTotal += h.n;
-  });
-  places.forEach(p => { p.on = near(p.pt); if (p.on) otherTotal += 1; });
-  styleAll();
-  document.getElementById('homeCount').textContent = homeTotal.toLocaleString();
-  document.getElementById('aptCount').textContent = aptTotal;
-  document.getElementById('aptHomes').textContent = `${aptHomes.toLocaleString()} home${aptHomes === 1 ? '' : 's'} inside`;
-  document.getElementById('otherCount').textContent = otherTotal;
-}
-
-// Time filter: recolors every symbol by whether its last visit falls inside the chosen window.
-document.querySelectorAll('.chips span[data-days]').forEach(c => c.onclick = () => {
-  document.querySelectorAll('.chips span[data-days]').forEach(x => x.classList.remove('on'));
-  c.classList.add('on');
-  windowDays = +c.dataset.days;
-  styleAll();
-});
-</script>
-</body>
-</html>
+  routeLine = turf.lineString(r.coordinates.map(c =>
