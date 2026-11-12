@@ -161,7 +161,7 @@ function visitHtml(v) {
     : new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   // Old visits were imported under one account, so their canvasser comes from the "covered by" column instead.
   const who = v.details.before_app ? v.details.covered_by : v.members?.display_name;
-  let h = `<div class="visit"><b>Last visit:</b> ${when}${who ? ' · ' + esc(who) : ''}`;
+  let h = `<div class="visit"><b>Last visit:</b> ${when} · ${esc(who || 'Canvasser Unknown')}`;
   if (v.unit) h += `<br><b>Unit:</b> ${esc(v.unit)}`;
   if (v.outcome) h += `<br><b>What happened:</b> ${esc(v.outcome)}`;
   Object.entries(v.details).forEach(([k, val]) => {
