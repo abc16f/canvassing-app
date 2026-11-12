@@ -159,11 +159,13 @@ const nice = k => k.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
 function visitHtml(v) {
   const when = v.details.before_app ? 'Before Nov 2026'
     : new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  let h = `<div class="visit"><b>Last visit:</b> ${when} · ${esc(v.members?.display_name || 'unknown')}`;
+  // Old visits were imported under one account, so their canvasser comes from the "covered by" column instead.
+  const who = v.details.before_app ? v.details.covered_by : v.members?.display_name;
+  let h = `<div class="visit"><b>Last visit:</b> ${when}${who ? ' · ' + esc(who) : ''}`;
   if (v.unit) h += `<br><b>Unit:</b> ${esc(v.unit)}`;
   if (v.outcome) h += `<br><b>What happened:</b> ${esc(v.outcome)}`;
   Object.entries(v.details).forEach(([k, val]) => {
-    if (k === 'before_app' || val === '' || val == null || (Array.isArray(val) && !val.length)) return;
+    if (k === 'before_app' || k === 'covered_by' || val === '' || val == null || (Array.isArray(val) && !val.length)) return;
     h += `<br><b>${esc(nice(k))}:</b> ${esc(Array.isArray(val) ? val.join(', ') : val)}`;
   });
   if (v.avoid_next_time) h += `<br><b style="color:#A32D2D">Avoid next time:</b> ${esc([...v.avoid_reasons, v.avoid_note].filter(Boolean).join(' — '))}`;
