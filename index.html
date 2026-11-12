@@ -19,49 +19,17 @@
   .chips span { display: inline-block; border: 1px solid #bbb; border-radius: 8px; padding: 2px 8px; margin: 2px 2px 0 0; font-size: 12px; cursor: pointer; }
   .chips span.on { background: #e6f1fb; border-color: #378add; color: #0c447c; }
   .leaflet-routing-container { display: none; }
-  .legend { background: #fff; border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,.25); padding: 6px 10px; font-size: 12px; line-height: 1.7; }
-  .legend summary { font-weight: 600; cursor: pointer; }
-  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -2px; }
-  .addstop { margin-top: 6px; font-size: 13px; padding: 4px 8px; }
-  .legend h4 { margin: 6px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #666; }
-  .shp { display: inline-block; margin-right: 8px; vertical-align: -1px; box-sizing: border-box; border: 1px solid #555; }
-  .dia { transform: rotate(45deg); }
-  .mk-apt, .mk-place { box-sizing: border-box; border: 2px solid #fff; box-shadow: 0 0 0 1px #555; display: flex; align-items: center; justify-content: center; }
-  .mk-place { transform: rotate(45deg); }
-  .mk-place span { transform: rotate(-45deg); font: 700 10px system-ui, sans-serif; color: #fff; }
-  .mk-on { box-shadow: 0 0 0 3px #185FA5 !important; }
-  #gate { position: fixed; inset: 0; z-index: 3000; background: #f3f2ee; display: flex; align-items: center; justify-content: center; padding: 16px; }
-  #gate.hide { display: none; }
-  #gate .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.15); padding: 20px; max-width: 360px; width: 100%; }
-  #gate h2 { margin: 0 0 6px; font-size: 20px; }
-  #gate input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 8px 10px; border: 1px solid #bbb; border-radius: 8px; margin: 10px 0; }
-  #gate button.main { width: 100%; font-size: 15px; padding: 9px; background: #534AB7; color: #fff; border: none; }
-  #gateMsg { margin-top: 10px; font-size: 14px; }
-  #who a { color: #534AB7; cursor: pointer; text-decoration: underline; }
 </style>
 </head>
 <body>
-<div id="gate">
-  <div class="card">
-    <h2>Poncey-Highland canvassing</h2>
-    <div class="muted" style="font-size:14px">This map is for invited canvassers. Enter your email and we will send you a sign-in link.</div>
-    <div id="gateForm">
-      <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
-      <button class="main" id="sendLink">Email me a sign-in link</button>
-    </div>
-    <div id="gateMsg"></div>
-  </div>
-</div>
 <div id="map"></div>
 <div id="panel">
   <div class="row" style="justify-content:space-between">
     <b>Poncey-Highland</b>
-    <span class="muted" id="routeInfo">Tap anywhere on the map to add a stop</span>
+    <span class="muted" id="routeInfo">Tap the map to add stops</span>
   </div>
-  <div class="muted" id="who"></div>
-  <div class="row" style="margin-top:6px; align-items:stretch">
-    <div class="stat"><span class="muted">Homes on route, not apartments</span><b id="homeCount">0</b></div>
-    <div class="stat"><span class="muted">Apartment buildings on route</span><b id="aptCount">0</b><span class="muted" id="aptHomes">0 homes inside</span></div>
+  <div class="row" style="margin-top:6px">
+    <div class="stat"><span class="muted">Home doors on route</span><b id="homeCount">0</b></div>
     <div class="stat"><span class="muted">Other doors on route</span><b id="otherCount">0</b></div>
   </div>
   <div class="chips" style="margin-top:6px"><span class="muted">Visited in last: </span>
@@ -79,49 +47,89 @@
 <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
-<script src="https://unpkg.com/@supabase/supabase-js@2.119.0/dist/umd/supabase.js"></script>
 <script>
-// Sign-in. The publishable key is meant to be public; the database's access rules decide what each person can see.
-const SUPABASE_URL = 'https://fsmrqphsvapnlghkpcmv.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_HwtYNPyU_ElOwGp7OvGUFQ_wdlgatgb';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-let me = null;   // the signed-in canvasser's name and organizer flag, once confirmed
+// Map centered on Poncey-Highland, with OpenStreetMap streets underneath.
+const map = L.map('map', { zoomControl: false }).setView([33.7725, -84.3575], 16);
+L.control.zoom({ position: 'topright' }).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
 
-const gate = document.getElementById('gate'), gateMsg = document.getElementById('gateMsg'), gateForm = document.getElementById('gateForm');
-function showGate(msg, showForm) {
-  me = null; gate.classList.remove('hide');
-  gateForm.style.display = showForm ? '' : 'none';
-  gateMsg.innerHTML = msg || '';
+// Official Poncey-Highland outline from the City of Atlanta. If the city's server blocks the request, the map still works without it.
+fetch("https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/1/query?where=NAME%3D'Poncey-Highland'&returnGeometry=true&outSR=4326&f=geojson")
+  .then(r => r.json()).then(g => L.geoJSON(g, { style: { color: '#534AB7', weight: 2, fill: false, dashArray: '4 4' } }).addTo(map))
+  .catch(() => {});
+
+const STATUS_COLOR = { 'visited': '#1D9E75', 'not visited': '#888780', 'contacted, not visited': '#BA7517' };
+let homes = [], places = [], routeLine = null, bufferM = 50;
+
+function loadCsv(path) {
+  return new Promise((ok, fail) => Papa.parse(path, { download: true, header: true, skipEmptyLines: true, complete: r => ok(r.data), error: fail }));
 }
 
-// Sends a one-time sign-in link. Only people already invited can get one, because sign-ups are turned off.
-document.getElementById('sendLink').onclick = async () => {
-  const email = document.getElementById('email').value.trim();
-  if (!email) { gateMsg.textContent = 'Type your email first.'; return; }
-  gateMsg.textContent = 'Sending...';
-  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname } });
-  gateMsg.textContent = error
-    ? (/signup|not allowed|not found/i.test(error.message) ? 'That email is not on the invite list. Ask Alex or Amir to invite you.'
-      : /rate limit/i.test(error.message) ? 'Too many sign-in emails were sent recently. Wait an hour and try again.'
-      : 'Could not send the link: ' + error.message)
-    : 'Check your email for the sign-in link. Open it on this device.';
-};
+Promise.all([loadCsv('data/home_doors.csv'), loadCsv('data/nonres_public.csv')]).then(([h, p]) => {
+  homes = h.map(d => {
+    const apt = d.building_type === 'apartment building';
+    const label = `${d.building_address}${d.unit ? ', Unit ' + d.unit : ''}<br>${d.building_type} · ${d.home_doors} home door${d.home_doors === '1' ? '' : 's'}`;
+    const m = L.circleMarker([+d.lat, +d.lon], { radius: apt ? 7 : 3, color: apt ? '#534AB7' : '#5F5E5A', weight: 1, fillOpacity: 0.7 })
+      .bindTooltip(label).bindPopup(label).addTo(map);
+    return { ...d, n: +d.home_doors, pt: turf.point([+d.lon, +d.lat]), marker: m, apt };
+  });
+  places = p.map(d => {
+    const label = `<b>${d.name}</b><br>${d.type} · ${d.address}<br>Status: ${d.status}${d.last_visit ? ' (' + d.last_visit + ')' : ''}${d.shared_address_with ? '<br>Shares this address with ' + d.shared_address_with : ''}`;
+    const m = L.circleMarker([+d.lat, +d.lon], { radius: 8, color: d.shared_address_with ? '#444' : '#fff', weight: 2, fillColor: STATUS_COLOR[d.status] || '#888780', fillOpacity: 1 })
+      .bindTooltip(label).bindPopup(label).addTo(map);
+    return { ...d, pt: turf.point([+d.lon, +d.lat]), marker: m };
+  });
+}).catch(e => alert('Could not load the data files: ' + e));
 
-// After sign-in, confirm the person is on the team list before showing the map.
-async function checkMember(session) {
-  if (!session) return showGate('', true);
-  const { data, error } = await sb.from('members').select('display_name, is_organizer').eq('user_id', session.user.id);
-  if (error) return showGate('Could not check the team list: ' + error.message + '<br><button onclick="signOut()" style="margin-top:8px">Sign out</button>', false);
-  if (!data.length) return showGate(`You are signed in as ${session.user.email}, but you are not on the team list yet. Ask Alex or Amir to add you.<br><button onclick="signOut()" style="margin-top:8px">Sign out</button>`, false);
-  me = { ...data[0], id: session.user.id };
-  gate.classList.add('hide');
-  document.getElementById('who').innerHTML = `Signed in as ${me.display_name}${me.is_organizer ? ' (organizer)' : ''} · <a onclick="signOut()">Sign out</a>`;
+// Walking routes come from the free FOSSGIS routing server, which asks for at most one request per second, so the route redraws only after a drag ends.
+const router = L.Routing.osrmv1({ serviceUrl: 'https://routing.openstreetmap.de/routed-foot/route/v1', profile: 'driving' });
+const control = L.Routing.control({
+  router, waypoints: [], routeWhileDragging: false, addWaypoints: true, draggableWaypoints: true, fitSelectedRoutes: false, show: false,
+  lineOptions: { styles: [{ color: '#534AB7', weight: 5, opacity: 0.85 }] },
+  createMarker: (i, wp) => L.marker(wp.latLng, { draggable: true })
+}).addTo(map);
+
+function realStops() { return control.getWaypoints().filter(w => w.latLng); }
+
+map.on('click', e => {
+  const stops = realStops().map(w => w.latLng);
+  stops.push(e.latlng);
+  control.setWaypoints(stops);
+});
+document.getElementById('undo').onclick = () => control.setWaypoints(realStops().slice(0, -1).map(w => w.latLng));
+document.getElementById('loop').onclick = () => { const s = realStops().map(w => w.latLng); if (s.length > 1) control.setWaypoints([...s, s[0]]); };
+document.getElementById('clear').onclick = () => { control.setWaypoints([]); routeLine = null; recount(); };
+document.getElementById('buffer').onchange = e => { bufferM = +e.target.value; recount(); };
+
+control.on('routesfound', e => {
+  const r = e.routes[0];
+  routeLine = turf.lineString(r.coordinates.map(c => [c.lng, c.lat]));
+  const miles = (r.summary.totalDistance / 1609.34).toFixed(2);
+  document.getElementById('routeInfo').textContent = `${miles} mi · about ${Math.round(r.summary.totalTime / 60)} min walking`;
+  recount();
+});
+control.on('waypointschanged', () => { if (realStops().length < 2) { routeLine = null; document.getElementById('routeInfo').textContent = 'Tap the map to add stops'; recount(); } });
+
+// Count every home door and place within the chosen distance of the route, and enlarge the ones that count.
+function recount() {
+  let homeTotal = 0, otherTotal = 0;
+  const near = pt => routeLine && turf.pointToLineDistance(pt, routeLine, { units: 'meters' }) <= bufferM;
+  homes.forEach(h => {
+    const on = near(h.pt);
+    if (on) homeTotal += h.n;
+    h.marker.setStyle({ color: h.apt ? '#534AB7' : (on ? '#185FA5' : '#5F5E5A'), fillOpacity: on ? 1 : 0.35 });
+    h.marker.setRadius(h.apt ? 7 : (on ? 4.5 : 3));
+  });
+  places.forEach(p => { const on = near(p.pt); if (on) otherTotal += 1; p.marker.setRadius(on ? 10 : 8); });
+  document.getElementById('homeCount').textContent = homeTotal.toLocaleString();
+  document.getElementById('otherCount').textContent = otherTotal;
 }
-async function signOut() { await sb.auth.signOut(); }
 
-// Runs when the page opens and whenever someone signs in or out. The check waits a moment so it does not block the sign-in library.
-sb.auth.onAuthStateChange((event, session) => setTimeout(() => checkMember(session), 0));
+// Time filter: shown now so the layout is final; it will filter visit logs once the app starts saving them.
+document.querySelectorAll('.chips span[data-days]').forEach(c => c.onclick = () => {
+  document.querySelectorAll('.chips span[data-days]').forEach(x => x.classList.remove('on'));
+  c.classList.add('on');
+});
 </script>
-<script src="map.js"></script>
 </body>
 </html>
