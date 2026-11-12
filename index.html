@@ -65,9 +65,10 @@ legend.onAdd = () => {
     <div><span class="sw" style="background:#5F5E5A;width:8px;height:8px"></span>Home door (house, condo, or townhome)</div>
     <div><span class="sw" style="background:#185FA5;width:9px;height:9px"></span>Home door on the route</div>
     <div><span class="sw" style="background:#534AB7"></span>Apartment building (blue ring when on the route)</div>
-    <div><span class="sw" style="background:#1D9E75;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Business or church, visited</div>
-    <div><span class="sw" style="background:#BA7517;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Contacted, not visited</div>
-    <div><span class="sw" style="background:#888780;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Not visited</div>
+    <div><span class="sw" style="background:#1D9E75;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Business or church, visited in the chosen time</div>
+    <div><span class="sw" style="background:#BA7517;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Contacted, not visited, in the chosen time</div>
+    <div><span class="sw" style="background:#9FE1CB;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Visited or contacted before Nov 2026 (exact date unknown)</div>
+    <div><span class="sw" style="background:#888780;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Not visited in the chosen time</div>
     <div><span class="sw" style="background:#888780;border:2px solid #444"></span>Two places share this address</div>
     <div><span style="display:inline-block;width:14px;height:4px;background:#534AB7;margin-right:6px;vertical-align:3px"></span>Walking route</div>
     <div><span style="display:inline-block;width:14px;border-top:2px dashed #534AB7;margin-right:6px;vertical-align:3px"></span>Poncey-Highland boundary</div>
@@ -85,7 +86,19 @@ fetch("https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/Geopoliti
   .then(r => r.json()).then(g => L.geoJSON(g, { style: { color: '#534AB7', weight: 2, fill: false, dashArray: '4 4' } }).addTo(map))
   .catch(() => {});
 
-const STATUS_COLOR = { 'visited': '#1D9E75', 'not visited': '#888780', 'contacted, not visited': '#BA7517' };
+const STATUS_COLOR = { 'visited': '#1D9E75', 'contacted, not visited': '#BA7517' };
+let windowDays = 30;
+
+// A place is colored by its status only if its last visit falls inside the chosen time window.
+// Visits logged before the app existed have no exact date, so they get their own pale color in every window.
+function placeColor(d) {
+  if (!STATUS_COLOR[d.status]) return '#888780';
+  if (d.last_visit === 'Before Nov 2026') return '#9FE1CB';
+  const when = new Date(d.last_visit);
+  if (isNaN(when)) return '#888780';
+  return (Date.now() - when) / 86400000 <= windowDays ? STATUS_COLOR[d.status] : '#888780';
+}
+function refreshPlaceColors() { places.forEach(p => p.marker.setStyle({ fillColor: placeColor(p) })); }
 let homes = [], places = [], routeLine = null, bufferM = 50;
 
 // Every dot's pop-up gets a button that adds a route stop at that dot, since tapping a dot opens its details instead.
@@ -109,7 +122,7 @@ Promise.all([loadCsv('data/home_doors.csv'), loadCsv('data/nonres_public.csv')])
   });
   places = p.map(d => {
     const label = `<b>${d.name}</b><br>${d.type} · ${d.address}<br>Status: ${d.status}${d.last_visit ? ' (' + d.last_visit + ')' : ''}${d.shared_address_with ? '<br>Shares this address with ' + d.shared_address_with : ''}`;
-    const m = L.circleMarker([+d.lat, +d.lon], { radius: 8, color: d.shared_address_with ? '#444' : '#fff', weight: 2, fillColor: STATUS_COLOR[d.status] || '#888780', fillOpacity: 1, bubblingMouseEvents: false })
+    const m = L.circleMarker([+d.lat, +d.lon], { radius: 8, color: d.shared_address_with ? '#444' : '#fff', weight: 2, fillColor: placeColor(d), fillOpacity: 1, bubblingMouseEvents: false })
       .bindTooltip(label).bindPopup(label + addStopButton(d)).addTo(map);
     return { ...d, pt: turf.point([+d.lon, +d.lat]), marker: m };
   });
@@ -162,10 +175,12 @@ function recount() {
   document.getElementById('otherCount').textContent = otherTotal;
 }
 
-// Time filter: shown now so the layout is final; it will filter visit logs once the app starts saving them.
+// Time filter: recolors places by whether their last visit falls inside the chosen window.
 document.querySelectorAll('.chips span[data-days]').forEach(c => c.onclick = () => {
   document.querySelectorAll('.chips span[data-days]').forEach(x => x.classList.remove('on'));
   c.classList.add('on');
+  windowDays = +c.dataset.days;
+  refreshPlaceColors();
 });
 </script>
 </body>
