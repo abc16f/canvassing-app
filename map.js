@@ -77,20 +77,22 @@ function loadCsv(path) {
   return new Promise((ok, fail) => Papa.parse(path, { download: true, header: true, skipEmptyLines: true, complete: r => ok(r.data), error: fail }));
 }
 
-Promise.all([loadCsv('data/home_doors.csv'), loadCsv('data/nonres_public.csv')]).then(([h, p]) => {
+const dataReady = Promise.all([loadCsv('data/home_doors.csv'), loadCsv('data/nonres_public.csv')]).then(([h, p]) => {
   homes = h.map(d => {
     const apt = d.building_type === 'apartment building';
     const label = `${d.building_address}${d.unit ? ', Unit ' + d.unit : ''}<br>${d.building_type} · ${d.home_doors} home door${d.home_doors === '1' ? '' : 's'}`;
     const m = (apt ? L.marker([+d.lat, +d.lon], { icon: shapeIcon('apt', '#888780', false), bubblingMouseEvents: false })
                    : L.circleMarker([+d.lat, +d.lon], { radius: 3.5, color: '#555', weight: 1, fillColor: '#888780', fillOpacity: 1, bubblingMouseEvents: false }))
       .bindTooltip(label).bindPopup(label + addStopButton(d)).addTo(map);
-    return { ...d, n: +d.home_doors, pt: turf.point([+d.lon, +d.lat]), marker: m, apt, on: false };
+    return { ...d, ref: d.door_id, label, n: +d.home_doors, pt: turf.point([+d.lon, +d.lat]), marker: m, apt, on: false };
   });
   places = p.map(d => {
-    const label = `<b>${d.name}</b><br>${d.type} · ${d.address}<br>Status: ${d.status}${d.last_visit ? ' (' + d.last_visit + ')' : ''}${d.shared_address_with ? '<br>Shares this address with ' + d.shared_address_with : ''}`;
+    const shared = d.shared_address_with ? '<br>Shares this address with ' + d.shared_address_with : '';
+    const labelBase = `<b>${d.name}</b><br>${d.type} · ${d.address}${shared}`;   // used once a logged visit replaces the old status line
+    const label = `<b>${d.name}</b><br>${d.type} · ${d.address}<br>Status: ${d.status}${d.last_visit ? ' (' + d.last_visit + ')' : ''}${shared}`;
     const m = L.marker([+d.lat, +d.lon], { icon: shapeIcon('place', '#888780', false), bubblingMouseEvents: false, zIndexOffset: 500 })
       .bindTooltip(label).bindPopup(label + addStopButton(d)).addTo(map);
-    return { ...d, pt: turf.point([+d.lon, +d.lat]), marker: m, on: false };
+    return { ...d, ref: d.id, label, labelBase, pt: turf.point([+d.lon, +d.lat]), marker: m, on: false };
   });
   styleAll();
 }).catch(e => alert('Could not load the data files: ' + e));
@@ -148,3 +150,43 @@ document.querySelectorAll('.chips span[data-days]').forEach(c => c.onclick = () 
   windowDays = +c.dataset.days;
   styleAll();
 });
+
+// Latest visit in each hover box. Runs after sign-in, because visit logs are only readable by signed-in team members.
+// Contact info is requested only for organizers; the database refuses it for everyone else anyway.
+const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const nice = k => k.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+
+function visitHtml(v) {
+  const when = v.details.before_app ? 'Before Nov 2026'
+    : new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  let h = `<div class="visit"><b>Last visit:</b> ${when} · ${esc(v.members?.display_name || 'unknown')}`;
+  if (v.unit) h += `<br><b>Unit:</b> ${esc(v.unit)}`;
+  if (v.outcome) h += `<br><b>What happened:</b> ${esc(v.outcome)}`;
+  Object.entries(v.details).forEach(([k, val]) => {
+    if (k === 'before_app' || val === '' || val == null || (Array.isArray(val) && !val.length)) return;
+    h += `<br><b>${esc(nice(k))}:</b> ${esc(Array.isArray(val) ? val.join(', ') : val)}`;
+  });
+  if (v.avoid_next_time) h += `<br><b style="color:#A32D2D">Avoid next time:</b> ${esc([...v.avoid_reasons, v.avoid_note].filter(Boolean).join(' — '))}`;
+  if (v.notes) h += `<br><b>Notes:</b> ${esc(v.notes)}`;
+  const c = Array.isArray(v.visit_contacts) ? v.visit_contacts[0] : v.visit_contacts;
+  if (c) h += `<div class="contact"><b>Contact (organizers only):</b> ${esc([c.name, c.phone, c.email].filter(Boolean).join(' · '))}<br>OK to contact: ${c.ok_to_contact ? 'yes' : 'no'}</div>`;
+  return h + '</div>';
+}
+
+async function loadVisits() {
+  await dataReady;
+  const cols = 'created_at, door_ref, unit, outcome, details, notes, avoid_next_time, avoid_reasons, avoid_note, members(display_name)'
+             + (me?.is_organizer ? ', visit_contacts(name, phone, email, ok_to_contact)' : '');
+  const { data, error } = await sb.from('visits').select(cols).order('created_at', { ascending: false });
+  if (error || !data) { console.warn('Could not load visits:', error?.message); return; }
+  const latest = {};
+  data.forEach(v => { if (!latest[v.door_ref]) latest[v.door_ref] = v; });   // newest first, so the first one per door is the latest
+  [...homes, ...places].forEach(d => {
+    const v = latest[d.ref];
+    d.lastVisit = v || null;
+    const base = v && d.labelBase ? d.labelBase : d.label;
+    const extra = v ? visitHtml(v) : '';
+    d.marker.setTooltipContent(base + extra);
+    d.marker.setPopupContent(base + extra + addStopButton(d));
+  });
+}
