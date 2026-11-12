@@ -32,8 +32,9 @@
     <b>Poncey-Highland</b>
     <span class="muted" id="routeInfo">Tap anywhere on the map to add a stop</span>
   </div>
-  <div class="row" style="margin-top:6px">
-    <div class="stat"><span class="muted">Home doors on route</span><b id="homeCount">0</b></div>
+  <div class="row" style="margin-top:6px; align-items:stretch">
+    <div class="stat"><span class="muted">Homes on route, not apartments</span><b id="homeCount">0</b></div>
+    <div class="stat"><span class="muted">Apartment buildings on route</span><b id="aptCount">0</b><span class="muted" id="aptHomes">0 homes inside</span></div>
     <div class="stat"><span class="muted">Other doors on route</span><b id="otherCount">0</b></div>
   </div>
   <div class="chips" style="margin-top:6px"><span class="muted">Visited in last: </span>
@@ -61,7 +62,7 @@ const legend = L.control({ position: 'topleft' });
 legend.onAdd = () => {
   const d = L.DomUtil.create('div', 'legend');
   d.innerHTML = `<details open><summary>Legend</summary>
-    <div><span class="sw" style="background:#5F5E5A;width:8px;height:8px"></span>Home door</div>
+    <div><span class="sw" style="background:#5F5E5A;width:8px;height:8px"></span>Home door (house, condo, or townhome)</div>
     <div><span class="sw" style="background:#185FA5;width:9px;height:9px"></span>Home door on the route</div>
     <div><span class="sw" style="background:#534AB7"></span>Apartment building (blue ring when on the route)</div>
     <div><span class="sw" style="background:#1D9E75;border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>Business or church, visited</div>
@@ -143,18 +144,21 @@ control.on('routesfound', e => {
 });
 control.on('waypointschanged', () => { if (realStops().length < 2) { routeLine = null; document.getElementById('routeInfo').textContent = 'Tap anywhere on the map to add a stop'; recount(); } });
 
-// Count every home door and place within the chosen distance of the route, and enlarge the ones that count.
+// Count houses and condos, apartment buildings (and the homes inside them), and other places within the chosen distance of the route, and enlarge the ones that count.
 function recount() {
-  let homeTotal = 0, otherTotal = 0;
+  let homeTotal = 0, aptTotal = 0, aptHomes = 0, otherTotal = 0;
   const near = pt => routeLine && turf.pointToLineDistance(pt, routeLine, { units: 'meters' }) <= bufferM;
   homes.forEach(h => {
     const on = near(h.pt);
-    if (on) homeTotal += h.n;
+    if (on && h.apt) { aptTotal += 1; aptHomes += h.n; }
+    else if (on) homeTotal += h.n;
     h.marker.setStyle({ color: on ? '#185FA5' : (h.apt ? '#534AB7' : '#5F5E5A'), weight: h.apt && on ? 3 : 1, fillOpacity: on ? 1 : 0.35 });
     h.marker.setRadius(h.apt ? 7 : (on ? 4.5 : 3));
   });
   places.forEach(p => { const on = near(p.pt); if (on) otherTotal += 1; p.marker.setRadius(on ? 10 : 8); });
   document.getElementById('homeCount').textContent = homeTotal.toLocaleString();
+  document.getElementById('aptCount').textContent = aptTotal;
+  document.getElementById('aptHomes').textContent = `${aptHomes.toLocaleString()} home${aptHomes === 1 ? '' : 's'} inside`;
   document.getElementById('otherCount').textContent = otherTotal;
 }
 
