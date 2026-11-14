@@ -66,6 +66,14 @@ function styleAll() {
 }
 let homes = [], places = [], routeLine = null, bufferM = 50;
 
+// Phones and tablets have no mouse to hover with, so a tap would open the hover box and the pop-up at once.
+// On those screens, only the pop-up is used. On a computer, clicking a symbol hides its hover box while the pop-up is open.
+const canHover = window.matchMedia('(hover: hover)').matches;
+function addHover(m, html) {
+  if (!canHover) return m;
+  return m.bindTooltip(html).on('popupopen', () => m.closeTooltip());
+}
+
 // Every dot's pop-up gets a button that adds a route stop at that dot, since tapping a dot opens its details instead.
 function addStopButton(d) { return `<br><button class="addstop" onclick="addStopAt(${+d.lat}, ${+d.lon})">Add a stop here</button>`; }
 function addStopAt(lat, lon) {
@@ -81,17 +89,17 @@ const dataReady = Promise.all([loadCsv('data/home_doors.csv'), loadCsv('data/non
   homes = h.map(d => {
     const apt = d.building_type === 'apartment building';
     const label = `${d.building_address}${d.unit ? ', Unit ' + d.unit : ''}<br>${d.building_type} · ${d.home_doors} home door${d.home_doors === '1' ? '' : 's'}`;
-    const m = (apt ? L.marker([+d.lat, +d.lon], { icon: shapeIcon('apt', '#888780', false), bubblingMouseEvents: false })
-                   : L.circleMarker([+d.lat, +d.lon], { radius: 3.5, color: '#555', weight: 1, fillColor: '#888780', fillOpacity: 1, bubblingMouseEvents: false }))
-      .bindTooltip(label).bindPopup(label + addStopButton(d)).addTo(map);
+    const m = addHover(apt ? L.marker([+d.lat, +d.lon], { icon: shapeIcon('apt', '#888780', false), bubblingMouseEvents: false })
+                           : L.circleMarker([+d.lat, +d.lon], { radius: 3.5, color: '#555', weight: 1, fillColor: '#888780', fillOpacity: 1, bubblingMouseEvents: false }), label)
+      .bindPopup(label + addStopButton(d)).addTo(map);
     return { ...d, ref: d.door_id, label, n: +d.home_doors, pt: turf.point([+d.lon, +d.lat]), marker: m, apt, on: false };
   });
   places = p.map(d => {
     const shared = d.shared_address_with ? '<br>Shares this address with ' + d.shared_address_with : '';
     const labelBase = `<b>${d.name}</b><br>${d.type} · ${d.address}${shared}`;   // used once a logged visit replaces the old status line
     const label = `<b>${d.name}</b><br>${d.type} · ${d.address}<br>Status: ${d.status}${d.last_visit ? ' (' + d.last_visit + ')' : ''}${shared}`;
-    const m = L.marker([+d.lat, +d.lon], { icon: shapeIcon('place', '#888780', false), bubblingMouseEvents: false, zIndexOffset: 500 })
-      .bindTooltip(label).bindPopup(label + addStopButton(d)).addTo(map);
+    const m = addHover(L.marker([+d.lat, +d.lon], { icon: shapeIcon('place', '#888780', false), bubblingMouseEvents: false, zIndexOffset: 500 }), label)
+      .bindPopup(label + addStopButton(d)).addTo(map);
     return { ...d, ref: d.id, label, labelBase, pt: turf.point([+d.lon, +d.lat]), marker: m, on: false };
   });
   styleAll();
